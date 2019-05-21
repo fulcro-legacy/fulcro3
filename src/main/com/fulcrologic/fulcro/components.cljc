@@ -627,12 +627,13 @@
          :qualifier qualifier}))))
 
 (defn transact!
-  ([comp tx options]
-   (when-let [app (any->app comp)]
-     (let [tx!     (:com.fulcrologic.fulcro.application/tx! app)
+  "Submit a transaction for processing."
+  ([app-or-component tx options]
+   (when-let [app (any->app app-or-component)]
+     (let [tx!     (-> app)
            options (cond-> options
-                     (has-ident? comp) (assoc :ref (get-ident comp))
-                     (component? comp) (assoc :component comp))]
+                     (has-ident? app-or-component) (assoc :ref (get-ident app-or-component))
+                     (component? app-or-component) (assoc :component app-or-component))]
        (tx! app tx options))))
   ([comp tx]
    (transact! comp tx {})))

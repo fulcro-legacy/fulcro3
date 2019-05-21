@@ -25,11 +25,9 @@
 
 (defn ^:export start []
   (app/mount! app ui/Root "app")
-  (app/default-tx! app `[(api/load-list ~{:key       [:list/id 1]
-                                          :component ui/TodoList})]))
+  (comp/transact! app `[(api/load-list ~{:key       [:list/id 1]
+                                         :component ui/TodoList})]))
 
 (comment
   (-> app ::app/runtime-atom deref)
-  (-> app ::app/state-atom deref)
-
-  )
+  (-> app ::app/state-atom deref))
