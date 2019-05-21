@@ -30,8 +30,8 @@
   (swap! (::runtime-atom app) update ::basis-t inc))
 
 (defn- render-root! [app]
-  (let [{::keys [runtime-atom state-atom]} app
-        {::keys [root-factory root-class mount-node]} @runtime-atom
+  (let [{:keys [::runtime-atom ::state-atom]} app
+        {:keys [::root-factory ::root-class ::mount-node]} @runtime-atom
         state-map @state-atom
         query     (comp/get-query root-class state-map)
         data-tree (fdn/db->tree query state-map state-map)]
@@ -47,8 +47,8 @@
     (eql/ast->query ast)))
 
 (defn root-changed? [app]
-  (let [{::keys [runtime-atom state-atom]} app
-        {::keys [root-class]} @runtime-atom
+  (let [{:keys [::runtime-atom ::state-atom]} app
+        {:keys [::root-class]} @runtime-atom
         state-map       @state-atom
         prior-state-map (-> runtime-atom deref ::last-rendered-state)
         props-query     (props-only-query (comp/get-query root-class state-map))
@@ -67,7 +67,7 @@
 
 (defn render-component! [app ident c]
   #?(:cljs
-     (let [{::keys [state-atom]} app
+     (let [{:keys [::state-atom]} app
            state-map @state-atom
            query     (comp/get-query c state-map)
            q         [{ident query}]
@@ -78,8 +78,8 @@
          (.setState ^js c (fn [s] #js {"fulcro$value" new-props}))))))
 
 (defn render-stale-components! [app]
-  (let [{::keys [runtime-atom state-atom]} app
-        {::keys [indexes last-rendered-state components-to-refresh]} @runtime-atom
+  (let [{:keys [::runtime-atom ::state-atom]} app
+        {:keys [::indexes ::last-rendered-state ::components-to-refresh]} @runtime-atom
         {:keys [ident->components]} indexes
         state-map      @state-atom
         mounted-idents (keys ident->components)
@@ -95,7 +95,7 @@
    (render! app false))
   ([app force-root]
    (tick! app)
-   (let [{::keys [runtime-atom state-atom]} app]
+   (let [{:keys [::runtime-atom ::state-atom]} app]
      (binding [fdn/*denormalize-time* (basis-t app)
                comp/*query-state*     @state-atom]
        (if (or force-root (root-changed? app))
@@ -114,7 +114,7 @@
   "Default (Fulcro-2 compatible) transaction submission."
   ([app tx]
    (default-tx! app tx {:optimistic? true}))
-  ([{::keys [runtime-atom] :as app} tx options]
+  ([{:keys [::runtime-atom] :as app} tx options]
    (txn/schedule-activation! app)
    (let [node (txn/tx-node tx options)
          ref  (get options :ref)]
@@ -128,8 +128,8 @@
             render-middleware
             remotes]}]
    {::state-atom   (atom {})
-    ::algorithms   {::tx!     default-tx!
-                    ::render! schedule-render!}
+    ::algorithms   {:tx!     default-tx!
+                    :render! schedule-render!}
     ::runtime-atom (atom
                      {
                       ;; TASK: Put these under a common key for rendering?
@@ -156,7 +156,7 @@
 
 (defn fulcro-app? [x] (and (map? x) (contains? x ::state-atom) (contains? x ::runtime-atom)))
 
-(defn mounted? [{::keys [runtime-atom]}]
+(defn mounted? [{:keys [::runtime-atom]}]
   (-> runtime-atom deref ::app-root boolean))
 
 (defn merge!
@@ -260,7 +260,6 @@
   ;; OR at beginning
   (defonce app (with-render (fulcro-app) my-render))
   ```
-
   "
   [app render!]
   (set-algorithm app :render! render!))

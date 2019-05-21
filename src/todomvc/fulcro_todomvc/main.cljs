@@ -12,7 +12,7 @@
     [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp]))
 
-(defn handle-remote [{::txn/keys [ast result-handler] :as send-node}]
+(defn handle-remote [{:keys [::txn/ast ::txn/result-handler] :as send-node}]
   (log/info "Remote got AST: " ast)
   (let [query (eql/ast->query ast)]
     (async/go
@@ -25,8 +25,8 @@
 
 (defn ^:export start []
   (app/mount! app ui/Root "app")
-  (app/default-tx! app `[(api/load-list ~{:key [:list/id 1]
-                                  :component   ui/TodoList})]))
+  (app/default-tx! app `[(api/load-list ~{:key       [:list/id 1]
+                                          :component ui/TodoList})]))
 
 (comment
   (-> app ::app/runtime-atom deref)
