@@ -5,7 +5,8 @@
     [com.fulcrologic.fulcro.mutations :as m]
     [taoensso.timbre :as log]
     [edn-query-language.core :as eql]
-    [clojure.set :as set]))
+    [clojure.set :as set]
+    [com.fulcrologic.fulcro.algorithms.application-helpers :as ah]))
 
 (declare schedule-activation! process-queue! remove-send!)
 
@@ -518,6 +519,6 @@
                         new-queue))
                     []
                     (::active-queue @runtime-atom))
-        render!   (-> app (:com.fulcrologic.fulcro.application/algorithms :render!))]
+        render!   (ah/app-algorithm app :schedule-render!)]
     (swap! runtime-atom assoc ::active-queue new-queue)
     (render! app)))

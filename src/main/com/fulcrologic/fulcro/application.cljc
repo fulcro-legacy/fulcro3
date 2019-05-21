@@ -3,6 +3,7 @@
     [com.fulcrologic.fulcro.rendering.ident-optimized-render :as ident-optimized]
     [com.fulcrologic.fulcro.algorithms.scheduling :as sched]
     [com.fulcrologic.fulcro.algorithms.tx-processing :as txn]
+    [com.fulcrologic.fulcro.algorithms.indexing :as indexing]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.mutations :as mut]
     [com.fulcrologic.fulcro.components :as comp]
@@ -27,12 +28,12 @@
     (-> app ::state-atom deref)))
 
 (defn tick!
-  "Move the basis-t forward one tick."
+  "Move the basis-t forward one tick. For internal use and internal algorithms."
   [app]
   (swap! (::runtime-atom app) update ::basis-t inc))
 
 (defn render!
-  "Render the application immediately.  Prefer `schedule-render!`.
+  "Render the application immediately.  Prefer `schedule-render!`, which will ensure no more than 60fps.
 
   `force-root?` - boolean.  When true disables all optimizations and forces a full root re-render."
   ([app]
@@ -46,12 +47,16 @@
        (render! app force-root?))
      (swap! runtime-atom assoc ::last-rendered-state @state-atom))))
 
-(defn schedule-render! [app]
-  #?(:clj  (render! app)
-     :cljs (let [r #(render! app)]
-             (if (not (exists? js/requestAnimationFrame))
-               (sched/defer r 16)
-               (js/requestAnimationFrame r)))))
+(defn schedule-render!
+  "Schedule a render on the next animation frame."
+  ([app]
+   (schedule-render! app false))
+  ([app force-root?]
+   #?(:clj  (render! app force-root?)
+      :cljs (let [r #(render! app force-root?)]
+              (if (not (exists? js/requestAnimationFrame))
+                (sched/defer r 16)
+                (js/requestAnimationFrame r))))))
 
 (defn default-tx!
   "Default (Fulcro-2 compatible) transaction submission."
@@ -74,11 +79,12 @@
     ::algorithms   {:algorithm/tx!               default-tx!
                     :algorithm/optimized-render! ident-optimized/render!
                     :algorithm/render!           render!
+                    :algorithm/merge!            nil
+                    :algorithm/index-component!  indexing/index-component!
+                    :algorithm/drop-component!   indexing/drop-component!
                     :algorithm/schedule-render!  schedule-render!}
     ::runtime-atom (atom
-                     {
-                      ;; TASK: Put these under a common key for rendering?
-                      ::app-root                                                       nil
+                     {::app-root                                                       nil
                       ::mount-node                                                     nil
                       ::root-class                                                     nil
                       ::root-factory                                                   nil

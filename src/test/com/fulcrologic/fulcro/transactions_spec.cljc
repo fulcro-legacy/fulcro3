@@ -14,7 +14,8 @@
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [edn-query-language.core :as eql]
     [clojure.test :refer [is are deftest]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.fulcro.algorithms.application-helpers :as ah]))
 
 (>defn ->send
   ([id options]
@@ -465,7 +466,7 @@
                   (assoc ::txn/id (uuid 1))
                   (txn/dispatch-elements {} (fn [e] (m/mutate e))))
         {:keys [::txn/result-handler ::txn/update-handler]
-         :as        resultant-node} (txn/add-send! app tx-node 0 :remote)]
+         :as   resultant-node} (txn/add-send! app tx-node 0 :remote)]
     (component "Handlers"
       (behavior "update handler"
         (when-mocking
@@ -832,7 +833,7 @@
                                            (::txn/id n) => (uuid 2))
                                          nil)
 
-      (let [{:keys [::app/runtime-atom] :as app} (-> (fulcro-app) (app/with-render (fn [app])))
+      (let [{:keys [::app/runtime-atom] :as app} (-> (fulcro-app) (ah/with-optimized-render (fn [app])))
             active-queue [(assoc (txn/tx-node `[(f {})]) ::txn/id (uuid 1))
                           (assoc (txn/tx-node `[(g {})]) ::txn/id (uuid 2))]]
         (swap! runtime-atom assoc ::txn/active-queue active-queue)
