@@ -510,7 +510,7 @@
 
 (defn process-queue!
   "Run through the active queue and do a processing step."
-  [{:com.fulcrologic.fulcro.application/keys [runtime-atom render!] :as app}]
+  [{:com.fulcrologic.fulcro.application/keys [runtime-atom ] :as app}]
   (let [new-queue (reduce
                     (fn *pstep [new-queue n]
                       (if-let [new-node (process-tx-node! app n)]

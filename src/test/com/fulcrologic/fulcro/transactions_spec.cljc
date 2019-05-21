@@ -70,7 +70,7 @@
                                           "schedules activation"
                                           app => mock-app)
 
-      (let [actual (app/tx! mock-app '[(f) (g)])
+      (let [actual (app/default-tx! mock-app '[(f) (g)])
             queue  (-> mock-app ::app/runtime-atom deref ::txn/submission-queue)
             node   (first queue)]
         (assertions
@@ -171,8 +171,8 @@
       (txn/process-queue! app) => (assertions
                                     "Processes the active queue."
                                     true => true)
-      (app/tx! app `[(f {})])
-      (app/tx! app `[(g {})])
+      (app/default-tx! app `[(f {})])
+      (app/default-tx! app `[(g {})])
       (txn/activate-submissions! app)
 
       (let [sub-q (-> app ::app/runtime-atom deref ::txn/submission-queue)
@@ -832,7 +832,7 @@
                                            (::txn/id n) => (uuid 2))
                                          nil)
 
-      (let [{::app/keys [runtime-atom] :as app} (fulcro-app)
+      (let [{::app/keys [runtime-atom] :as app} (-> (fulcro-app) (app/with-render (fn [app])))
             active-queue [(assoc (txn/tx-node `[(f {})]) ::txn/id (uuid 1))
                           (assoc (txn/tx-node `[(g {})]) ::txn/id (uuid 2))]]
         (swap! runtime-atom assoc ::txn/active-queue active-queue)

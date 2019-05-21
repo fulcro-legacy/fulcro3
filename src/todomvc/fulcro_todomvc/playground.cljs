@@ -1,4 +1,4 @@
-(ns com.fulcrologic.fulcro.main
+(ns fulcro_todomvc.playground
   (:require
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     ["react" :as react :refer [useState useEffect]]

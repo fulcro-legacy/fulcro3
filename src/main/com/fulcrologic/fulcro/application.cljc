@@ -36,7 +36,7 @@
         query     (comp/get-query root-class state-map)
         data-tree (fdn/db->tree query state-map state-map)]
     (binding [comp/*app* app]
-      (js/ReactDOM.render (root-factory data-tree) mount-node))))
+      #?(:cljs (js/ReactDOM.render (root-factory data-tree) mount-node)))))
 
 (defn props-only-query [query]
   (let [ast (eql/query->ast query)
@@ -110,17 +110,16 @@
                (sched/defer r 16)
                (js/requestAnimationFrame r)))))
 
-(defn tx!
-  "Submit a new transaction to the given Fulcro app."
+(defn default-tx!
+  "Default (Fulcro-2 compatible) transaction submission."
   ([app tx]
-   (tx! app tx {:optimistic? true}))
+   (default-tx! app tx {:optimistic? true}))
   ([{::keys [runtime-atom] :as app} tx options]
    (txn/schedule-activation! app)
    (let [node (txn/tx-node tx options)
          ref  (get options :ref)]
      (swap! runtime-atom (fn [s] (cond-> (update s ::txn/submission-queue (fnil conj []) node)
-                                   ref (update ::components-to-refresh (fnil conj []) ref)
-                                   )))
+                                   ref (update ::components-to-refresh (fnil conj []) ref))))
      (::txn/id node))))
 
 (defn fulcro-app
@@ -129,10 +128,12 @@
             render-middleware
             remotes]}]
    {::state-atom   (atom {})
-    ::tx!          tx!
-    ::render!      schedule-render!
+    ::algorithms   {::tx!     default-tx!
+                    ::render! schedule-render!}
     ::runtime-atom (atom
-                     {::app-root                                                       nil
+                     {
+                      ;; TASK: Put these under a common key for rendering?
+                      ::app-root                                                       nil
                       ::mount-node                                                     nil
                       ::root-class                                                     nil
                       ::root-factory                                                   nil
@@ -140,6 +141,7 @@
                       ::last-rendered-state                                            {}
                       ::middleware                                                     {:extra-props-middleware extra-props-middleware
                                                                                         :render-middleware      render-middleware}
+
                       ::remotes                                                        (or remotes
                                                                                          {:remote (fn [send]
                                                                                                     (log/fatal "Remote requested, but no remote defined."))})
@@ -240,3 +242,25 @@
            (let [app-root (js/ReactDOM.render (root-factory initial-tree) dom-node)]
              (swap! (::runtime-atom app) assoc
                ::app-root app-root)))))))
+
+(defn- set-algorithm [app k v]
+  (assoc-in app [::algorithms k] v))
+
+(defn with-render
+  "Replace the render refresh algorithm on an app. Returns a new app:
+
+  ```
+  (defonce app (atom nil))
+
+  (reset! app (fulcro-app))
+
+  ;; later
+  (swap! app with-render my-render!)
+
+  ;; OR at beginning
+  (defonce app (with-render (fulcro-app) my-render))
+  ```
+
+  "
+  [app render!]
+  (set-algorithm app :render! render!))
