@@ -4,6 +4,7 @@
   (:refer-clojure :exclude [ident? uuid])
   (:require
     [taoensso.timbre :as log]
+    [edn-query-language.core :as eql]
     [clojure.spec.alpha :as s])
   #?(:clj
      (:import (clojure.lang Atom))))
@@ -90,3 +91,9 @@
         (log/warn "Unions are not designed to be used with fewer than two children. Check your calls to Fulcro
         load functions where the :without set contains " (pr-str union-key)))
       (update ast :children (fn [c] (vec (keep #(elide-ast-nodes % elision-predicate) c)))))))
+
+(defn elide-query-nodes
+  "Remove items from a query when the query element where the (node-predicate key) returns true. Commonly used with
+   a set as a predicate to elide specific well-known UI-only paths."
+  [query node-predicate]
+  (-> query eql/query->ast (elide-ast-nodes node-predicate) eql/ast->query))

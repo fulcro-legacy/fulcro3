@@ -146,11 +146,13 @@
 (s/def :algorithm/index-component! fn?)
 (s/def :algorithm/drop-component! fn?)
 (s/def :algorithm/schedule-render! fn?)
+(s/def :algorithm/global-query-transform fn?)
 (s/def ::app/algorithms (s/keys :req [:algorithm/tx!
                                       :algorithm/optimized-render!
                                       :algorithm/render!
                                       :algorithm/merge*
                                       :algorithm/load-error?
+                                      :algorithm/global-query-transform
                                       :algorithm/index-component!
                                       :algorithm/drop-component!
                                       :algorithm/schedule-render!]))

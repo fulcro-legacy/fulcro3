@@ -7,7 +7,6 @@
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.data-fetch-impl :as impl]
     [com.fulcrologic.fulcro.mutations :as m]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]
@@ -22,7 +21,7 @@
 
 (def marker-table
   "The name of the table in which fulcro load markers are stored"
-  impl/marker-table)
+  :ui.fulcro.client.data-fetch.load-markers/by-id)
 
 (defn multiple-targets [& targets]
   (apply targeting/multiple-targets targets))
@@ -36,39 +35,37 @@
 (defn replace-at [target]
   (targeting/replace-at target))
 
-(defn elide-query-nodes
-  "Remove items from a query when the query element where the (node-predicate key) returns true. Commonly used with
-   a set as a predicate to elide specific well-known UI-only paths."
-  [query node-predicate]
-  (-> query eql/query->ast (util/elide-ast-nodes node-predicate) eql/ast->query))
 
 (defn load-params*
   "Internal function to validate and process the parameters of `load` and `load-action`."
-  [state-map server-property-or-ident class-or-factory {:keys [target params marker post-mutation post-mutation-params without
-                                                               fallback focus ok-action post-action error-action remote
-                                                               abort-id update-query]
-                                                        :or   {remote :remote marker false}}]
+  [app server-property-or-ident class-or-factory {:keys [target params marker post-mutation post-mutation-params without
+                                                         fallback focus ok-action post-action error-action remote
+                                                         abort-id update-query]
+                                                  :or   {remote :remote marker false}}]
   {:pre [(or (nil? target) (vector? target))
          (or (nil? post-mutation) (symbol? post-mutation))
          (or (nil? post-mutation-params) (map? post-mutation-params))
          (or (nil? params) (map? params))
          (or (eql/ident? server-property-or-ident) (keyword? server-property-or-ident))]}
-  (let [query' (if class-or-factory
-                 (cond-> (comp/get-query class-or-factory state-map)
-                   (set? without) (elide-query-nodes without)
-                   focus (eql/focus-subquery focus)
-                   update-query update-query)
-                 nil)
-        query  (cond
-                 (and class-or-factory (map? params)) `[({~server-property-or-ident ~query'} ~params)]
-                 class-or-factory [{server-property-or-ident query'}]
-                 (map? params) [(list server-property-or-ident params)]
-                 :else [server-property-or-ident])
-        marker (if (true? marker)
-                 (do
-                   (log/warn "Boolean load marker no longer supported.")
-                   false)
-                 marker)]
+  (let [state-map              (app/current-state app)
+        global-query-transform (get (ah/app-algorithm app) :algorithm/global-query-transform nil)
+        transformed-query      (if class-or-factory
+                                 (cond-> (comp/get-query class-or-factory state-map)
+                                   global-query-transform (global-query-transform)
+                                   (set? without) (util/elide-query-nodes without)
+                                   focus (eql/focus-subquery focus)
+                                   update-query update-query)
+                                 nil)
+        query                  (cond
+                                 (and class-or-factory (map? params)) `[({~server-property-or-ident ~transformed-query} ~params)]
+                                 class-or-factory [{server-property-or-ident transformed-query}]
+                                 (map? params) [(list server-property-or-ident params)]
+                                 :else [server-property-or-ident])
+        marker                 (if (true? marker)
+                                 (do
+                                   (log/warn "Boolean load marker no longer supported.")
+                                   false)
+                                 marker)]
     {:query                query
      :source-key           server-property-or-ident
      :remote               remote
@@ -107,8 +104,8 @@
       (ok-action env))
     (let [{:keys [body]} result
           {:keys [::app/state-atom]} app]
-      (log/debug "Doing merge and targeting steps")
-      (swap! state-atom (fn [s] (cond-> (merge/merge* s body query)
+      (log/debug "Doing merge and targeting steps: " body query)
+      (swap! state-atom (fn [s] (cond-> (merge/merge* s query body)
                                   target (targeting/process-target source-key target))))
       (remove-load-marker! app marker)
       (when (symbol? post-mutation)
@@ -125,8 +122,10 @@
   (when (symbol? fallback)
     (comp/transact! app `[(fallback ~(assoc env :load-params params))])))
 
-(defmethod m/mutate `load! [{:keys [query remote marker] :as params}]
-  (let [remote-key (or remote :remote)]
+(defmethod m/mutate `internal-load! [{:keys [ast] :as env}]
+  (let [params     (get ast :params)
+        {:keys [remote query marker]} params
+        remote-key (or remote :remote)]
     (log/debug "Loading " remote " query:" query)
     (cond-> {:action        (fn [{:keys [app]}] (set-load-marker! app marker :loading))
              :result-action (fn [{:keys [result app] :as env}]
@@ -198,9 +197,8 @@
                          (cond-> {:marker load-marker-default :parallel false :refresh [] :without #{}}
                            query-transform-default (assoc :update-query query-transform-default))
                          config)
-         state-map     (app/current-state app)
-         mutation-args (load-params* state-map server-property-or-ident class-or-factory config)]
-     (comp/transact! app `[(load! ~mutation-args)]))))
+         mutation-args (load-params* app server-property-or-ident class-or-factory config)]
+     (comp/transact! app `[(internal-load! ~mutation-args)]))))
 
 (defn load-field!
   "Load a field of the current component. Runs `prim/transact!`.
@@ -222,13 +220,12 @@
         {:keys [params update-query]
          :or   {;; TASK: restore query-transform-default
                 #_#_update-query query-transform-default}} params
-        state-map    (app/current-state app)
         ident        (comp/get-ident component)
         update-query (fn [q]
                        (cond-> (eql/focus-subquery q [field])
                          update-query (update-query)))
-        params       (load-params* state-map ident component (assoc params
-                                                               :update-query update-query
-                                                               :source-key (comp/get-ident component)))]
-    (comp/transact! app [(list `load! params)])))
+        params       (load-params* app ident component (assoc params
+                                                         :update-query update-query
+                                                         :source-key (comp/get-ident component)))]
+    (comp/transact! app [(list `internal-load! params)])))
 

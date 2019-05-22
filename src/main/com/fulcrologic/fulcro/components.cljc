@@ -102,13 +102,13 @@
      (or (gobj/get x "type") (type x))))
 
 (defn component-options
-  ([this & ks] (get-in (component-options this) (vec ks)))
-  ([this]
-   (when (component? this)
-     (let [c               (react-type this)
-           options #?(:cljs (or (gobj/get this options-key) (gobj/get c options-key))
-                      ;; FIXME
-                      :clj nil)]
+  ([this & ks]
+   (let [c               (react-type this)
+         options #?(:cljs (or (gobj/get this options-key) (gobj/get c options-key))
+                    ;; FIXME
+                    :clj nil)]
+     (if (seq options)
+       (get-in options (vec ks))
        options))))
 
 (defn has-feature? #?(:cljs {:tag boolean}) [component option-key] (contains? (component-options component) option-key))
