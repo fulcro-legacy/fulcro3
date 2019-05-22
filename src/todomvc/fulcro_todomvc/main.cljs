@@ -30,7 +30,7 @@
   (log/info "mount")
   (app/mount! app ui/Root "app")
   (log/info "submit")
-  (comp/transact! app `[(api/load-list ~{:key       [:list/id 1]
+  (df/load app `[(api/load-list ~{:key       [:list/id 1]
                                          :component ui/TodoList})]))
 
 (comment

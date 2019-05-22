@@ -70,6 +70,8 @@
                                    ref (update ::components-to-refresh (fnil conj []) ref))))
      (::txn/id node))))
 
+(defn default-load-error? [{:keys [status-code body] :as result}] (not= 200 status-code))
+
 (defn fulcro-app
   ([] (fulcro-app {}))
   ([{:keys [extra-props-middleware
@@ -79,7 +81,8 @@
     ::algorithms   {:algorithm/tx!               default-tx!
                     :algorithm/optimized-render! ident-optimized/render!
                     :algorithm/render!           render!
-                    :algorithm/merge!            identity
+                    :algorithm/load-error?       default-load-error?
+                    :algorithm/merge*            merge/merge*
                     :algorithm/index-component!  indexing/index-component!
                     :algorithm/drop-component!   indexing/drop-component!
                     :algorithm/schedule-render!  schedule-render!}
