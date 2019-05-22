@@ -15,7 +15,7 @@
   [transient-node entity ast-prop-children]
   (reduce
     (fn [n {:keys [key]}]
-      (if-let [v (get entity key)]
+      (if-let [[_ v] (find entity key)]
         (assoc! n key v)
         n))
     transient-node
