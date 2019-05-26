@@ -1,17 +1,20 @@
 (ns com.fulcrologic.fulcro.algorithms.denormalize-test
-  (:require [clojure.test :refer [is are deftest]]
-            [com.fulcrologic.fulcro.algorithms.denormalize :as denorm]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.test :refer [is are deftest]]
             [clojure.test.check :as tc]
+            [clojure.test.check.clojure-test :as test]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as props]
-            [clojure.test.check.clojure-test :as test]
-            [clojure.spec.alpha :as s]
-            [fulcro.client.primitives :as fp]
+            [com.fulcrologic.fulcro.algorithms.denormalize :as denorm]
+            [com.fulcrologic.fulcro.components :as comp]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.gen :as pgen]
             [com.wsscode.pathom.test :as ptest]
-            [edn-query-language.core :as eql]))
+            [edn-query-language.core :as eql]
+            [fulcro.client.primitives :as fp]))
 
+(defn fake-ident [query ident-fn]
+  (with-meta query {:component (comp/configure-component! (fn [_]) :hi {:ident ident-fn})}))
 
 (def parser
   (p/parser
@@ -30,12 +33,34 @@
     (let [tree (parser {} query)]
       (= (denorm/db->tree query tree {}) (fp/db->tree query tree {})))))
 
-#_(test/defspec generator-makes-valid-db-props {} (valid-db-tree-props))
+(comment
+  (tc/quick-check 100 (valid-db-tree-props)))
+
+(test/defspec generator-makes-valid-db-props {} (valid-db-tree-props))
+
+(defn valid-db-tree-join-one []
+  (props/for-all [query (eql/make-gen {::eql/gen-query-expr
+                                       (fn gen-query-expr [{::eql/keys [gen-property gen-join]
+                                                            :as        env}]
+                                         (gen/frequency [[20 (gen-property env)]
+                                                         [6 (gen-join env)]]))
+
+                                       ::eql/gen-join-key
+                                       (fn gen-join-key [{::eql/keys [gen-property] :as env}]
+                                         (gen-property env))
+
+                                       ::eql/gen-join-query
+                                       (fn gen-join-query [{::eql/keys [gen-query] :as env}]
+                                         (gen-query env))}
+                          ::eql/gen-query)]
+    (let [tree (parser {} query)]
+      (= (denorm/db->tree query tree {}) (fp/db->tree query tree {})))))
 
 (comment
-  (find {:a nil} :o)
+  (tc/quick-check 50 (valid-db-tree-join-one) :max-size 12))
 
-  (let [query    [:h/i]
+(comment
+  (let [query    [{:*/A []}]
         tree     (parser {} query)
         new-impl (denorm/db->tree query tree {})
         old-impl (fp/db->tree query tree {})]
@@ -46,13 +71,7 @@
      :old-impl old-impl}))
 
 (comment
-  (tc/quick-check 50 (valid-db-tree-props) :max-size 12))
-
-(deftest test-db->tree
-  (is (= 0 1)))
-
-(comment
-  (parser {} [:foo :id :title])
+  (parser {} [:..0/y :.?/Ys_a :DI*/p :*/qe4_ :!T/? :./!0Ed])
 
   ((juxt :createdAt :name) {:createdAt 100 :name "Foo"})
 

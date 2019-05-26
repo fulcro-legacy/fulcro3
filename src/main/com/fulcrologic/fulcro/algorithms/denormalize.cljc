@@ -72,6 +72,7 @@
                                        (assoc! n key (denormalize parent-node join-entity state-map idents-seen)))
                                      (assoc! n key (denormalize parent-node join-entity state-map idents-seen)))
       (map? join-entity) (assoc! n key (denormalize target-node join-entity state-map idents-seen))
+      (contains? entity key) (assoc! n key v)
       :otherwise n)))
 
 (defn- add-union! [n {:keys [key] :as join-node} entity state-map idents-seen]
