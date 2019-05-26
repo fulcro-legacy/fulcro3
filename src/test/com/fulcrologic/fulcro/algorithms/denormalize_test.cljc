@@ -8,7 +8,6 @@
             [com.fulcrologic.fulcro.algorithms.denormalize :as denorm]
             [com.fulcrologic.fulcro.components :as comp]
             [com.wsscode.pathom.core :as p]
-            [com.wsscode.pathom.gen :as pgen]
             [com.wsscode.pathom.test :as ptest]
             [edn-query-language.core :as eql]
             [fulcro.client.primitives :as fp]))
@@ -38,7 +37,7 @@
 
 (test/defspec generator-makes-valid-db-props {} (valid-db-tree-props))
 
-(defn valid-db-tree-join-one []
+(defn valid-db-tree-join-no-links []
   (props/for-all [query (eql/make-gen {::eql/gen-query-expr
                                        (fn gen-query-expr [{::eql/keys [gen-property gen-join]
                                                             :as        env}]
@@ -57,7 +56,7 @@
       (= (denorm/db->tree query tree {}) (fp/db->tree query tree {})))))
 
 (comment
-  (tc/quick-check 50 (valid-db-tree-join-one) :max-size 12))
+  (tc/quick-check 50 (valid-db-tree-join-no-links) :max-size 12))
 
 (comment
   (let [query    [{:*/A []}]
