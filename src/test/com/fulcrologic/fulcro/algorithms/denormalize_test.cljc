@@ -2,7 +2,6 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.test :refer [is are deftest]]
             [clojure.test.check :as tc]
-            [clojure.test.check.clojure-test :as test]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as props]
             [com.fulcrologic.fulcro.algorithms.normalize :refer [tree->db]]
@@ -11,7 +10,7 @@
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.test :as ptest]
             [edn-query-language.core :as eql]
-            [fulcro.client.primitives :as fp]
+            [com.fulcrologic.fulcro.algorithms.legacy-db-tree :as fp]
             [fulcro-spec.diff :as diff]))
 
 (defn fake-ident [ident-fn]
@@ -23,9 +22,10 @@
 (defn inject-components [query]
   (eql/ast->query
     (p/transduce-children
-      (map (fn [{:keys [key type] :as node}]
+      (map (fn [{:keys [key type query] :as node}]
              (if (and (= :join type)
-                      (not (ptest/hash-mod? key 10)))
+                      (or (map? query)
+                          (not (ptest/hash-mod? key 10))))
                (assoc node :component (fake-ident first-ident))
                node)))
       (eql/query->ast query))))
@@ -48,7 +48,7 @@
       (= (denorm/db->tree query tree {}) (fp/db->tree query tree {})))))
 
 (comment
-  (tc/quick-check 100 (valid-db-tree-props)))
+  (tc/quick-check 50 (valid-db-tree-props)))
 
 #_
 (test/defspec generator-makes-valid-db-props {} (valid-db-tree-props))
@@ -74,6 +74,7 @@
 (comment
   (tc/quick-check 50 (valid-db-tree-join-no-links) :max-size 12))
 
+; broke: [{:!-n1/y!PN [{:A/A [:A/B]}]}]
 (defn valid-db-tree-join-with-links []
   (props/for-all [query (eql/make-gen {::eql/gen-query-expr
                                        (fn gen-query-expr [{::eql/keys [gen-property gen-join]
@@ -97,9 +98,35 @@
 (comment
   (tc/quick-check 50 (valid-db-tree-join-with-links) :max-size 12))
 
+; broke: [{:A/A {:A/A []}}]
+; broke: [{:a/A {:A/A [:A/A0]}}]
+; broke: [{:M/*S {:A/A []}}]
+(defn valid-db-tree-unions []
+  (props/for-all [query (eql/make-gen {::eql/gen-query-expr
+                                       (fn gen-query-expr [{::eql/keys [gen-property gen-join]
+                                                            :as        env}]
+                                         (gen/frequency [[20 (gen-property env)]
+                                                         [6 (gen-join env)]]))
+
+                                       ::eql/gen-join-key
+                                       (fn gen-join-key [{::eql/keys [gen-property] :as env}]
+                                         (gen-property env))
+
+                                       ::eql/gen-join-query
+                                       (fn gen-join-query [{::eql/keys [gen-query gen-union] :as env}]
+                                         (gen/frequency [[2 (gen-query env)]
+                                                         [1 (gen-union env)]]))}
+                          ::eql/gen-query)]
+    (let [query' (inject-components query)
+          tree   (parser {} query)
+          db     (tree->db query' tree true)]
+      (= (denorm/db->tree query db db) (fp/db->tree query db db)))))
+
 (comment
-  (comp/has-ident? (fake-ident first-ident))
-  (comp/get-ident (fake-ident first-ident) {:id 123})
+  (tc/quick-check 50 (valid-db-tree-unions) :max-size 12))
+
+(comment
+
 
   (def query [:O-/P_*T
               #:P!{:*O [
@@ -136,7 +163,28 @@
               node)))
      (eql/query->ast query)))
 
-  (parser {} query)
+  (let [query    [{:foo5 {:a [:a :b :c]
+                          :d [:d :e :f]
+                          :g [:g :h :i]}}]
+        query    (inject-components query)
+        tree     (parser {} query)
+        db       (tree->db query tree true)
+        new-impl (denorm/db->tree query db db)
+        old-impl (fp/db->tree query db db)]
+    {:valid?   (= new-impl old-impl)
+     :query    query
+     :tree     tree
+     :db       db
+     :old-impl old-impl
+     :new-impl new-impl
+     :diff     (diff/diff old-impl new-impl)})
+
+  (eql/query->ast [{:foo {:a [:a :b :c]
+                          :d [:d :e :f]
+                          :g [:g :h :i]}}])
+  (parser {} [{:foo5 {:a [:a :b :c]
+                      :d [:d :e :f]
+                      :g [:g :h :i]}}])
   (map (partial parser {})
     (gen/sample
       (eql/make-gen {::eql/gen-query-expr
@@ -150,23 +198,25 @@
                        (gen-property env))
 
                      ::eql/gen-join-query
-                     (fn gen-join-query [{::eql/keys [gen-query] :as env}]
-                       (gen-query env))}
+                     (fn gen-join-query [{::eql/keys [gen-query gen-union] :as env}]
+                       (gen/frequency [[2 (gen-query env)]
+                                       [1 (gen-union env)]]))}
         ::eql/gen-query)))
 
-  (let [query    [{:!-n1/y!PN [{:A/A [:A/B]}]}]
+  (eql/query->ast (inject-components [{:A/A {:A/A [:A/A]}}]))
+  (let [query    [{:A/A {:A/A [:A/A]}}]
         query    (inject-components query)
         tree     (parser {} query)
         db       (tree->db query tree true)
         new-impl (denorm/db->tree query db db)
         old-impl (fp/db->tree query db db)]
     {:valid?   (= new-impl old-impl)
-     :diff     (diff/diff old-impl new-impl)
      :query    query
      :tree     tree
      :db       db
+     :old-impl old-impl
      :new-impl new-impl
-     :old-impl old-impl}))
+     :diff     (diff/diff old-impl new-impl)}))
 
 (comment
   (parser {} [:..0/y :.?/Ys_a :DI*/p :*/qe4_ :!T/? :./!0Ed])

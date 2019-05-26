@@ -37,7 +37,7 @@
         v               (if link-join? (get-in state-map key) (get entity key))
         is-ref?         (lookup-ref? v)
         join-entity     (if is-ref? (get-in state-map v) v)
-        to-many?        (and (vector? join-entity))
+        to-many?        (and (not is-ref?) (vector? join-entity))
         depth-based?    (int? query)
         recursive?      (or (= '... query) depth-based?)
         stop-recursion? (and recursive? (or (= 0 query)
@@ -86,18 +86,22 @@
                              (assoc result union-key node))
                            {}
                            (:children union-node))
-        to-many?         (and (vector? v) (lookup-ref? (first v)))]
+        to-many?         (vector? v)]
     (cond
       to-many? (assoc! n key
                  (into []
                    (keep (fn [[table :as lookup-ref]]
-                           (when-let [e (get-in state-map lookup-ref)]
+                           (if-let [e (and (lookup-ref? lookup-ref)
+                                           (get-in state-map lookup-ref))]
                              (when-let [target-ast-node (union-key->query table)]
-                               (denormalize target-ast-node e state-map idents-seen)))))
+                               (denormalize target-ast-node e state-map idents-seen))
+                             {})))
                    v))
-      (lookup-ref? v) (when-let [e (get-in state-map v)]
+      (lookup-ref? v) (if-let [e (get-in state-map v)]
                         (when-let [target-ast-node (get union-key->query (first v))]
-                          (assoc! n key (denormalize target-ast-node e state-map idents-seen))))
+                          (assoc! n key (denormalize target-ast-node e state-map idents-seen)))
+                        (assoc! n key {}))
+      (contains? entity key) (assoc! n key v)
       :otherwise n)))
 
 (defn- add-joins! [transient-node entity state-map parent-node ast-join-nodes idents-seen]
