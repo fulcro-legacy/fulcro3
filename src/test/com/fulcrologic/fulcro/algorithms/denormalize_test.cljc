@@ -5,6 +5,7 @@
             [clojure.test.check.clojure-test :as test]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as props]
+            [com.fulcrologic.fulcro.algorithms.normalize :refer [tree->db]]
             [com.fulcrologic.fulcro.algorithms.denormalize :as denorm]
             [com.fulcrologic.fulcro.components :as comp]
             [com.wsscode.pathom.core :as p]
@@ -12,8 +13,10 @@
             [edn-query-language.core :as eql]
             [fulcro.client.primitives :as fp]))
 
-(defn fake-ident [query ident-fn]
-  (with-meta query {:component (comp/configure-component! (fn [_]) :hi {:ident ident-fn})}))
+(def FakeComponent {})
+
+(defn fake-ident [ident-fn]
+  (comp/configure-component! (fn [_]) ::FakeComponent {:ident ident-fn}))
 
 (def parser
   (p/parser
@@ -35,6 +38,7 @@
 (comment
   (tc/quick-check 100 (valid-db-tree-props)))
 
+#_
 (test/defspec generator-makes-valid-db-props {} (valid-db-tree-props))
 
 (defn valid-db-tree-join-no-links []
@@ -58,7 +62,76 @@
 (comment
   (tc/quick-check 50 (valid-db-tree-join-no-links) :max-size 12))
 
+(defn first-ident [& args]
+  (println "IDENT" args)
+  [:foo "bar"])
+
+(defn inject-components [query]
+  (eql/ast->query
+    (p/transduce-children
+      (map (fn [{:keys [key type] :as node}]
+             (if (and (= :join type)
+                      (not (ptest/hash-mod? key 10)))
+               (assoc node :component (fake-ident first-ident))
+               node)))
+      (eql/query->ast query))))
+
 (comment
+  (comp/has-ident? (fake-ident first-ident))
+
+  (def query [:O-/P_*T
+              #:P!{:*O [
+                        #:D.8{:.F [:z8B?/-.3! #:k1-!{:?+c [:_i2G/Z?0]} :?h-/hh :_b?/s6f]}
+                        #:M3{:ZW []}
+                        :mE/a4
+                        :P/*_]}
+              :dWr*/-
+              :d?./!+E!
+              :Vk/U
+              :-L.!/mD7?
+              :t/yNYL
+              #:O*_{:C6x [:S!7/+
+                          :Bj/FW!
+                          :z/e+
+                          :G-+X/J]}])
+  (ptest/hash-mod? :D.8/.F 10)
+
+  (let [data {:foo {:id "bar"}}
+        q' [{:foo (with-meta [:id] {:component (fake-ident first-ident)})}]]
+    (tree->db q' data true))
+
+  (let [data (parser {} query)
+        q' (inject-components query)]
+
+    (tree->db q' data true))
+
+  (eql/ast->query
+   (p/transduce-children
+     (map (fn [{:keys [key type query] :as node}]
+            (if (and (= :join type)
+                     (not (ptest/hash-mod? key 10)))
+              (assoc node :component (fake-ident first-ident))
+              node)))
+     (eql/query->ast query)))
+
+  (parser {} query)
+  (map (partial parser {})
+    (gen/sample
+      (eql/make-gen {::eql/gen-query-expr
+                     (fn gen-query-expr [{::eql/keys [gen-property gen-join]
+                                          :as        env}]
+                       (gen/frequency [[20 (gen-property env)]
+                                       [6 (gen-join env)]]))
+
+                     ::eql/gen-join-key
+                     (fn gen-join-key [{::eql/keys [gen-property] :as env}]
+                       (gen-property env))
+
+                     ::eql/gen-join-query
+                     (fn gen-join-query [{::eql/keys [gen-query] :as env}]
+                       (gen-query env))}
+        ::eql/gen-query)))
+
   (let [query    [{:*/A []}]
         tree     (parser {} query)
         new-impl (denorm/db->tree query tree {})
