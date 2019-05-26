@@ -5,7 +5,7 @@
 (def ^:dynamic *denormalize-time* 0)
 
 (defn lookup-ref? [v]
-  (and (vector? v) (= 2 (count v)) (not (lookup-ref? (first v)))))
+  (and (vector? v) (= 2 (count v)) (keyword? (first v))))
 
 (declare denormalize)
 
@@ -37,7 +37,7 @@
         v               (if link-join? (get-in state-map key) (get entity key))
         is-ref?         (lookup-ref? v)
         join-entity     (if is-ref? (get-in state-map v) v)
-        to-many?        (and (vector? join-entity) (lookup-ref? (first join-entity)))
+        to-many?        (and (vector? join-entity))
         depth-based?    (int? query)
         recursive?      (or (= '... query) depth-based?)
         stop-recursion? (and recursive? (or (= 0 query)
@@ -57,8 +57,10 @@
       stop-recursion? (assoc! n key v)
       to-many? (assoc! n key
                  (into []
-                   (keep (fn [lookup-ref]
-                           (when-let [e (get-in state-map lookup-ref)]
+                   (keep (fn [x]
+                           (let [e (if (lookup-ref? x)
+                                     (get-in state-map x)
+                                     x)]
                              (denormalize target-node e state-map idents-seen))))
                    join-entity))
       (and recursive? join-entity) (if depth-based?

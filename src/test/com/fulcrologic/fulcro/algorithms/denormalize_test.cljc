@@ -11,12 +11,24 @@
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.test :as ptest]
             [edn-query-language.core :as eql]
-            [fulcro.client.primitives :as fp]))
-
-(def FakeComponent {})
+            [fulcro.client.primitives :as fp]
+            [fulcro-spec.diff :as diff]))
 
 (defn fake-ident [ident-fn]
   (comp/configure-component! (fn [_]) ::FakeComponent {:ident ident-fn}))
+
+(defn first-ident [this props]
+  (vec (first props)))
+
+(defn inject-components [query]
+  (eql/ast->query
+    (p/transduce-children
+      (map (fn [{:keys [key type] :as node}]
+             (if (and (= :join type)
+                      (not (ptest/hash-mod? key 10)))
+               (assoc node :component (fake-ident first-ident))
+               node)))
+      (eql/query->ast query))))
 
 (def parser
   (p/parser
@@ -62,22 +74,32 @@
 (comment
   (tc/quick-check 50 (valid-db-tree-join-no-links) :max-size 12))
 
-(defn first-ident [& args]
-  (println "IDENT" args)
-  [:foo "bar"])
+(defn valid-db-tree-join-with-links []
+  (props/for-all [query (eql/make-gen {::eql/gen-query-expr
+                                       (fn gen-query-expr [{::eql/keys [gen-property gen-join]
+                                                            :as        env}]
+                                         (gen/frequency [[20 (gen-property env)]
+                                                         [6 (gen-join env)]]))
 
-(defn inject-components [query]
-  (eql/ast->query
-    (p/transduce-children
-      (map (fn [{:keys [key type] :as node}]
-             (if (and (= :join type)
-                      (not (ptest/hash-mod? key 10)))
-               (assoc node :component (fake-ident first-ident))
-               node)))
-      (eql/query->ast query))))
+                                       ::eql/gen-join-key
+                                       (fn gen-join-key [{::eql/keys [gen-property] :as env}]
+                                         (gen-property env))
+
+                                       ::eql/gen-join-query
+                                       (fn gen-join-query [{::eql/keys [gen-query] :as env}]
+                                         (gen-query env))}
+                          ::eql/gen-query)]
+    (let [query' (inject-components query)
+          tree   (parser {} query)
+          db     (tree->db query' tree true)]
+      (= (denorm/db->tree query db db) (fp/db->tree query db db)))))
+
+(comment
+  (tc/quick-check 50 (valid-db-tree-join-with-links) :max-size 12))
 
 (comment
   (comp/has-ident? (fake-ident first-ident))
+  (comp/get-ident (fake-ident first-ident) {:id 123})
 
   (def query [:O-/P_*T
               #:P!{:*O [
@@ -132,13 +154,17 @@
                        (gen-query env))}
         ::eql/gen-query)))
 
-  (let [query    [{:*/A []}]
+  (let [query    [{:!-n1/y!PN [{:A/A [:A/B]}]}]
+        query    (inject-components query)
         tree     (parser {} query)
-        new-impl (denorm/db->tree query tree {})
-        old-impl (fp/db->tree query tree {})]
+        db       (tree->db query tree true)
+        new-impl (denorm/db->tree query db db)
+        old-impl (fp/db->tree query db db)]
     {:valid?   (= new-impl old-impl)
+     :diff     (diff/diff old-impl new-impl)
      :query    query
      :tree     tree
+     :db       db
      :new-impl new-impl
      :old-impl old-impl}))
 
