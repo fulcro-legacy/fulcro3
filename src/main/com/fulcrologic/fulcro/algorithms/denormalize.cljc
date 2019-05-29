@@ -90,8 +90,8 @@
                              (assoc result union-key node))
                            {}
                            (:children union-node))
-        join-value?      (lookup-ref? v)
-        to-many?         (and (not join-value?) (vector? v))]
+        is-ref?          (lookup-ref? v)
+        to-many?         (and (not is-ref?) (vector? v))]
     (cond
       to-many? (assoc! n key
                  (into []
@@ -104,7 +104,7 @@
                                      {}))
                                  {})))
                        v))
-      join-value? (if-let [e (get-in state-map v)]
+      is-ref? (if-let [e (get-in state-map v)]
                     (if-let [target-ast-node (union-key->query (first v))]
                       (assoc! n key (denormalize target-ast-node e state-map idents-seen))
                       (assoc! n key {}))
