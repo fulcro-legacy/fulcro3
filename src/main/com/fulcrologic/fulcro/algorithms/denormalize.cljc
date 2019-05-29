@@ -86,21 +86,25 @@
                              (assoc result union-key node))
                            {}
                            (:children union-node))
-        to-many?         (vector? v)]
+        join-value?      (lookup-ref? v)
+        to-many?         (and (not join-value?) (vector? v))]
     (cond
       to-many? (assoc! n key
                  (into []
-                   (keep (fn [[table :as lookup-ref]]
-                           (if-let [e (and (lookup-ref? lookup-ref)
-                                           (get-in state-map lookup-ref))]
-                             (when-let [target-ast-node (union-key->query table)]
-                               (denormalize target-ast-node e state-map idents-seen))
-                             {})))
-                   v))
-      (lookup-ref? v) (if-let [e (get-in state-map v)]
-                        (when-let [target-ast-node (get union-key->query (first v))]
-                          (assoc! n key (denormalize target-ast-node e state-map idents-seen)))
-                        (assoc! n key {}))
+                       (keep (fn [lookup-ref]
+                               (if-let [e (and (lookup-ref? lookup-ref)
+                                               (get-in state-map lookup-ref))]
+                                 (let [[table] lookup-ref]
+                                   (if-let [target-ast-node (union-key->query table)]
+                                     (denormalize target-ast-node e state-map idents-seen)
+                                     {}))
+                                 {})))
+                       v))
+      join-value? (if-let [e (get-in state-map v)]
+                    (if-let [target-ast-node (union-key->query (first v))]
+                      (assoc! n key (denormalize target-ast-node e state-map idents-seen))
+                      (assoc! n key {}))
+                    (assoc! n key {}))
       (contains? entity key) (assoc! n key v)
       :otherwise n)))
 

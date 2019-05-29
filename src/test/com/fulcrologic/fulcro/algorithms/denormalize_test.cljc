@@ -101,6 +101,7 @@
 ; broke: [{:A/A {:A/A []}}]
 ; broke: [{:a/A {:A/A [:A/A0]}}]
 ; broke: [{:M/*S {:A/A []}}]
+; broke: [{:A/A [{:A/A* {:A/A [:A/B]}}]}]
 (defn valid-db-tree-unions []
   (props/for-all [query (eql/make-gen {::eql/gen-query-expr
                                        (fn gen-query-expr [{::eql/keys [gen-property gen-join]
@@ -204,7 +205,36 @@
         ::eql/gen-query)))
 
   (eql/query->ast (inject-components [{:A/A {:A/A [:A/A]}}]))
-  (let [query    [{:A/A {:A/A [:A/A]}}]
+  (let [query    [{:A/A {:A/A [:A/B]}}]
+        query    (inject-components query)
+        tree     (parser {} query)
+        db       (tree->db query tree true)
+        new-impl (denorm/db->tree query db db)
+        old-impl (fp/db->tree query db db)]
+    {:valid?   (= new-impl old-impl)
+     :query    query
+     :tree     tree
+     :db       db
+     :old-impl old-impl
+     :new-impl new-impl
+     :diff     (diff/diff old-impl new-impl)})
+
+  (let [query    [{:A/A* {:A/A [:A/B]}}]
+        query    (inject-components query)
+        tree     (parser {} query)
+        db       (tree->db query tree true)
+        new-impl (denorm/db->tree query db db)
+        old-impl (fp/db->tree query db db)]
+    {:valid?   (= new-impl old-impl)
+     :query    query
+     :tree     tree
+     :db       db
+     :old-impl old-impl
+     :new-impl new-impl
+     :diff     (diff/diff old-impl new-impl)})
+
+
+  (let [query    [{:A/A [{:A/A0 [{:A/B {:A/A [:A/A0]}}]}]}]
         query    (inject-components query)
         tree     (parser {} query)
         db       (tree->db query tree true)
