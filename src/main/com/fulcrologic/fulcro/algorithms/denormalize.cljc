@@ -12,12 +12,16 @@
 (defn- add-props!
   "Walk the given AST children (which MUST be prop nodes), and add their values from `current-entity`
   (if found)."
-  [transient-node entity ast-prop-children]
+  [transient-node entity ast-prop-children state-map]
   (reduce
     (fn [n {:keys [key]}]
       (if-let [[_ v] (find entity key)]
         (assoc! n key v)
-        n))
+        (if (lookup-ref? key)
+          (if-let [x (get-in state-map key)]
+            (assoc! n key x)
+            n)
+          n)))
     transient-node
     ast-prop-children))
 
@@ -128,9 +132,7 @@
         nil-nodes        (get grouped-children nil false)
         ;; NOTE: wildcard works better than the old db->tree (which ignores wildcard when joins are present)
         wildcard?        (and nil-nodes (= '* (some-> nil-nodes first :key)))
-        result-node      (if wildcard?
-                           (transient current-entity)
-                           (add-props! (transient {}) current-entity (:prop grouped-children)))
+        result-node      (add-props! (transient (if wildcard? current-entity {})) current-entity (:prop grouped-children) state-map)
         result-node      (add-joins! result-node current-entity state-map
                            top-node
                            (:join grouped-children)
