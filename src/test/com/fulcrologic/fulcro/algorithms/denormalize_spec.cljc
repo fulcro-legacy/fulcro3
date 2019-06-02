@@ -10,15 +10,50 @@
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.test :as ptest]
             [edn-query-language.core :as eql]
+            [fulcro.client.primitives :as fpp]
             [com.fulcrologic.fulcro.algorithms.legacy-db-tree :as fp]
             [fulcro-spec.core :refer [specification behavior assertions provided component when-mocking]]
             [fulcro-spec.diff :as diff]))
 
+;; helpers
+
+(defn fake-ident [ident-fn]
+  (comp/configure-component! (fn [_]) ::FakeComponent {:ident ident-fn}))
+
+(defn first-ident [this props]
+  (vec (first props)))
+
+(defn inject-components [query]
+  (eql/ast->query
+    (p/transduce-children
+      (map (fn [{:keys [key type query] :as node}]
+             (if (and (= :join type)
+                      (or (map? query)
+                          (not (ptest/hash-mod? key 10))))
+               (assoc node :component (fake-ident first-ident))
+               node)))
+      (eql/query->ast query))))
+
+(def parser
+  (p/parser
+    {::p/env     {::ptest/depth-limit 10
+                  ::p/reader          ptest/reader
+                  ::p/union-path      ptest/union-test-path}
+     ::p/plugins [p/request-cache-plugin]}))
+
+(defn query->db [query]
+  (let [query' (inject-components query)
+        tree   (parser {} query)]
+    (tree->db query' tree true)))
+
 ;; simple
 
-(defn verify-db->tree [query entity db]
+(defn verify-db->tree
+  "Run db->tree in both old and new implementations. Returns the result when
+  they match, when they don't an assertion will fail."
+  [query entity db]
   (let [new-impl (denorm/db->tree query entity db)
-        old-impl (fp/db->tree query entity db)]
+        old-impl (fpp/db->tree query entity db)]
     (assert (= new-impl old-impl) {:new-impl new-impl
                                    :old-impl old-impl
                                    :diff     (diff/diff old-impl new-impl)})
@@ -133,31 +168,31 @@
     => {:foo         [:point 123]
         [:point 123] {:bar "baz", :extra "data"}}))
 
+(comment
+  (fpp/db->tree '[{:entry [:id :message {:parent ...}]}]
+    {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+    {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+             2 {:id 2 :message "foo" :parent [:entry 3]}
+             3 {:id 3 :message "foo" :parent nil}}})
+
+  (denorm/db->tree '[{:entry [:id :message {:parent ...}]}]
+    {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+    {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+             2 {:id 2 :message "foo" :parent [:entry 3]}
+             3 {:id 3 :message "foo" :parent nil}}})
+  (fpp/db->tree '[{:entry [:message {:parent 1}]}]
+    {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+    {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+             2 {:id 2 :message "foo" :parent [:entry 3]}
+             3 {:id 3 :message "foo"}}})
+
+  (denorm/db->tree '[{:entry [:message {:parent 1}]}]
+    {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+    {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+             2 {:id 2 :message "foo" :parent [:entry 3]}
+             3 {:id 3 :message "foo"}}}))
+
 ;; generative
-
-(defn fake-ident [ident-fn]
-  (comp/configure-component! (fn [_]) ::FakeComponent {:ident ident-fn}))
-
-(defn first-ident [this props]
-  (vec (first props)))
-
-(defn inject-components [query]
-  (eql/ast->query
-    (p/transduce-children
-      (map (fn [{:keys [key type query] :as node}]
-             (if (and (= :join type)
-                      (or (map? query)
-                          (not (ptest/hash-mod? key 10))))
-               (assoc node :component (fake-ident first-ident))
-               node)))
-      (eql/query->ast query))))
-
-(def parser
-  (p/parser
-    {::p/env     {::ptest/depth-limit 10
-                  ::p/reader          ptest/reader
-                  ::p/union-path      ptest/union-test-path}
-     ::p/plugins [p/request-cache-plugin]}))
 
 (defn valid-db-tree-props []
   (props/for-all [query (eql/make-gen
@@ -197,6 +232,7 @@
   (tc/quick-check 50 (valid-db-tree-join-no-links) :max-size 12))
 
 ; broke: [{:!-n1/y!PN [{:A/A [:A/B]}]}]
+
 (defn valid-db-tree-join-with-links []
   (props/for-all [query (eql/make-gen {::eql/gen-query-expr
                                        (fn gen-query-expr [{::eql/keys [gen-property gen-join]
@@ -215,7 +251,7 @@
     (let [query' (inject-components query)
           tree   (parser {} query)
           db     (tree->db query' tree true)]
-      (= (denorm/db->tree query db db) (fp/db->tree query db db)))))
+      (= (denorm/db->tree query db db) (fpp/db->tree query db db)))))
 
 (comment
   (tc/quick-check 50 (valid-db-tree-join-with-links) :max-size 12))
@@ -240,16 +276,37 @@
                                          (gen/frequency [[2 (gen-query env)]
                                                          [1 (gen-union env)]]))}
                           ::eql/gen-query)]
-    (let [query' (inject-components query)
-          tree   (parser {} query)
-          db     (tree->db query' tree true)]
-      (= (denorm/db->tree query db db) (fp/db->tree query db db)))))
+    (let [db (query->db query)]
+      (= (denorm/db->tree query db db) (fpp/db->tree query db db)))))
 
 (comment
   (tc/quick-check 50 (valid-db-tree-unions) :max-size 12))
 
-(comment
+(defn valid-db-recursion []
+  (props/for-all [query (eql/make-gen {::eql/gen-query-expr
+                                       (fn gen-query-expr [{::eql/keys [gen-property gen-join]
+                                                            :as        env}]
+                                         (gen/frequency [[20 (gen-property env)]
+                                                         [6 (gen-join env)]]))
 
+                                       ::eql/gen-join-key
+                                       (fn gen-join-key [{::eql/keys [gen-property] :as env}]
+                                         (gen-property env))
+
+                                       ::eql/gen-join-query
+                                       (fn gen-join-query [{::eql/keys [gen-query gen-recursion] :as env}]
+                                         (gen/frequency [[2 (gen-query env)]
+                                                         [1 (gen-recursion env)]]))}
+                          ::eql/gen-query)]
+    (let [db (query->db query)]
+      (= (denorm/db->tree query db db) (fpp/db->tree query db db)))))
+
+(comment
+  (tc/quick-check 50 (valid-db-recursion) :max-size 12))
+
+(comment
+  (gen/sample
+   )
 
   (def query [:O-/P_*T
               #:P!{:*O [
@@ -356,12 +413,42 @@
      :diff     (diff/diff old-impl new-impl)})
 
 
-  (let [query    [{:A/A [{:A/A0 [{:A/B {:A/A [:A/A0]}}]}]}]
+  ; breaks old db->tree impl
+  (let [query    '[{:A/A [:A/A {:A/A 1}]}]
         query    (inject-components query)
         tree     (parser {} query)
         db       (tree->db query tree true)
         new-impl (denorm/db->tree query db db)
         old-impl (fp/db->tree query db db)]
+    {:valid?   (= new-impl old-impl)
+     :query    query
+     :tree     tree
+     :db       db
+     :old-impl old-impl
+     :new-impl new-impl
+     :diff     (diff/diff old-impl new-impl)})
+
+  (let [query    [{[:foo "bar"] [:foo]}]
+        query    (inject-components query)
+        tree     (parser {} query)
+        db       (tree->db query tree true)
+        new-impl (denorm/db->tree query db db)
+        old-impl (fpp/db->tree query db db)]
+    {:valid?   (= new-impl old-impl)
+     :query    query
+     :tree     tree
+     :db       db
+     :old-impl old-impl
+     :new-impl new-impl
+     :diff     (diff/diff old-impl new-impl)}))
+
+(defn ddd []
+  (let [query    [:A/B {:A/A 1}]
+        query    (inject-components query)
+        tree     (parser {} query)
+        db       (tree->db query tree true)
+        new-impl (denorm/db->tree query db db)
+        old-impl (fpp/db->tree query db db)]
     {:valid?   (= new-impl old-impl)
      :query    query
      :tree     tree
@@ -374,6 +461,8 @@
   (parser {} [:..0/y :.?/Ys_a :DI*/p :*/qe4_ :!T/? :./!0Ed])
 
   ((juxt :createdAt :name) {:createdAt 100 :name "Foo"})
+
+  (js/console.log '... '[*])
 
   (denorm/db->tree [:b :c] {:a 1 :b 2 :c 3} {})
 

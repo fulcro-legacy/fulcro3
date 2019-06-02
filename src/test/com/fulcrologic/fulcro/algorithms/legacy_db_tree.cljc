@@ -157,8 +157,8 @@
                                   (zip/node (move-to-key loc' (first ks))))
                                 (next ks))
                               loc')
-                            (recur loc' ks)))               ;; JOIN
-                        (recur (-> loc zip/down zip/down zip/down zip/right) ks)) ;; CALL
+                            (recur loc' ks))) ;; JOIN
+                        (recur (some-> loc zip/down zip/down zip/down zip/right) ks)) ;; CALL
                       (recur (zip/right loc) path)))))))]
     (query-template* (query-zip query) path)))
 
@@ -166,10 +166,11 @@
   "Changes a join on key k with depth limit from [:a {:k n}] to [:a {:k (dec n)}]"
   [q k]
   (if-not (empty? (focus-query q [k]))
-    (let [pos   (query-template q [k])
-          node  (zip/node pos)
-          node' (cond-> node (number? node) dec)]
-      (replace pos node'))
+    (if-let [pos (query-template q [k])]
+      (let [node  (zip/node pos)
+            node' (cond-> node (number? node) dec)]
+        (replace pos node'))
+      q)
     q))
 
 (defn- reduce-union-recursion-depth
@@ -201,9 +202,7 @@
                          (if (mappable-ident? refs data)
                            (recur (get-in refs (map-ident data)) (dec limit))
                            data)
-                         (do
-                           (println "An infinite loop was detected in your app state on ident: " data)
-                           {})))]
+                         {}))]
     (cond
       (vector? data)
       ;; join
@@ -270,9 +269,7 @@
                                         (if (mappable-ident? refs next)
                                           (recur next (dec limit))
                                           (map-ident v)))
-                                      (do
-                                        (println "An ident loop was detected in your app state on ident:" v)
-                                        {})))
+                                      {}))
                                   v)
                     limit       (if (number? sel) sel :none)
                     union-entry (if (util-union? join)
