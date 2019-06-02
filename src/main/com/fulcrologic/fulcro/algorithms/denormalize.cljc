@@ -58,7 +58,7 @@
                           (update idents-seen key (fnil conj #{}) v)
                           idents-seen)]
     (cond
-      stop-recursion? (assoc! n key v)
+      stop-recursion? n
       to-many? (assoc! n key
                  (into []
                    (keep (fn [x]
@@ -78,7 +78,9 @@
                                        (assoc! n key (denormalize parent-node join-entity state-map idents-seen)))
                                      (assoc! n key (denormalize parent-node join-entity state-map idents-seen)))
       (map? join-entity) (assoc! n key (denormalize target-node join-entity state-map idents-seen))
-      (contains? entity key) (assoc! n key v)
+      (and (contains? entity key)
+           (not recursive?)
+           (not link-join?)) (assoc! n key v)
       :otherwise n)))
 
 (defn- add-union! [n {:keys [key] :as join-node} entity state-map idents-seen]
