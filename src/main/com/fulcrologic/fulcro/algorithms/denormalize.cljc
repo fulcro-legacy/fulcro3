@@ -110,8 +110,9 @@
                     (if-let [target-ast-node (union-key->query (first v))]
                       (assoc! n key (denormalize target-ast-node e state-map idents-seen))
                       (assoc! n key {}))
-                    (assoc! n key {}))
-      (contains? entity key) (assoc! n key v)
+                    n)
+      (and (contains? entity key)
+           (not link-join?)) (assoc! n key v)
       :otherwise n)))
 
 (defn- add-joins! [transient-node entity state-map parent-node ast-join-nodes idents-seen]
