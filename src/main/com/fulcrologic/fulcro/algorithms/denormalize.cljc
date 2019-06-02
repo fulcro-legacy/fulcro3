@@ -15,12 +15,12 @@
   [transient-node entity ast-prop-children state-map]
   (reduce
     (fn [n {:keys [key]}]
-      (if-let [[_ v] (find entity key)]
-        (assoc! n key v)
-        (if (lookup-ref? key)
-          (if-let [x (get-in state-map key)]
-            (assoc! n key x)
-            n)
+      (if (lookup-ref? key)
+        (if-let [x (get-in state-map key)]
+          (assoc! n key x)
+          n)
+        (if-let [[_ v] (find entity key)]
+          (assoc! n key v)
           n)))
     transient-node
     ast-prop-children))

@@ -4,16 +4,16 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as props]
-            [com.fulcrologic.fulcro.algorithms.normalize :refer [tree->db]]
             [com.fulcrologic.fulcro.algorithms.denormalize :as denorm]
+            [com.fulcrologic.fulcro.algorithms.legacy-db-tree :as fp]
+            [com.fulcrologic.fulcro.algorithms.normalize :refer [tree->db]]
             [com.fulcrologic.fulcro.components :as comp]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.test :as ptest]
             [edn-query-language.core :as eql]
-            [fulcro.client.primitives :as fpp]
-            [com.fulcrologic.fulcro.algorithms.legacy-db-tree :as fp]
             [fulcro-spec.core :refer [specification behavior assertions provided component when-mocking]]
-            [fulcro-spec.diff :as diff]))
+            [fulcro-spec.diff :as diff]
+            [fulcro.client.primitives :as fpp]))
 
 ;; helpers
 
@@ -58,6 +58,10 @@
                                    :old-impl old-impl
                                    :diff     (diff/diff old-impl new-impl)})
     new-impl))
+
+(defn verify-db->tree-generated [query]
+  (let [db (query->db query)]
+    (verify-db->tree query db db)))
 
 (specification "db->tree"
   (assertions
@@ -149,6 +153,14 @@
                3 {:id 3 :message "foo"}}})
     => {:entry {:message "foo", :parent {:message "foo"}}}
 
+    "recursion cycle"
+    (verify-db->tree '[{:entry [:id :message {:parent 1}]}]
+      {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+      {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+               2 {:id 2 :message "foo" :parent [:entry 3]}
+               3 {:id 3 :message "foo" :parent [:entry 1]}}})
+    => {:entry {:id 1, :message "foo", :parent {:id 2, :message "foo"}}}
+
     "wildcard"
     (verify-db->tree
       ['*]
@@ -167,6 +179,26 @@
       {:point {123 {:bar "baz" :extra "data"}}})
     => {:foo         [:point 123]
         [:point 123] {:bar "baz", :extra "data"}}))
+
+(specification "db->tree - from generated"
+  (assertions
+    (verify-db->tree-generated [[:A/A 0]])
+    => {}
+
+    (verify-db->tree-generated [{:!-n1/y!PN [{:A/A [:A/B]}]}])
+    => {:!-n1/y!PN [{:A/A {:A/B ":A/B"}} {:A/A {:A/B ":A/B"}}]}
+
+    (verify-db->tree-generated [{:A/A {:A/A []}}])
+    => {:A/A []}
+
+    (verify-db->tree-generated [{:a/A {:A/A [:A/A0]}}])
+    => {:a/A {}}
+
+    (verify-db->tree-generated [{:M/*S {:A/A []}}])
+    => {:M/*S [{}]}
+
+    (verify-db->tree-generated [{:A/A [{:A/A* {:A/A [:A/B]}}]}])
+    => {:A/A {:A/A* [{}]}}))
 
 (comment
   (fpp/db->tree '[{:entry [:id :message {:parent ...}]}]
@@ -231,8 +263,6 @@
 (comment
   (tc/quick-check 50 (valid-db-tree-join-no-links) :max-size 12))
 
-; broke: [{:!-n1/y!PN [{:A/A [:A/B]}]}]
-
 (defn valid-db-tree-join-with-links []
   (props/for-all [query (eql/make-gen {::eql/gen-query-expr
                                        (fn gen-query-expr [{::eql/keys [gen-property gen-join]
@@ -256,10 +286,6 @@
 (comment
   (tc/quick-check 50 (valid-db-tree-join-with-links) :max-size 12))
 
-; broke: [{:A/A {:A/A []}}]
-; broke: [{:a/A {:A/A [:A/A0]}}]
-; broke: [{:M/*S {:A/A []}}]
-; broke: [{:A/A [{:A/A* {:A/A [:A/B]}}]}]
 (defn valid-db-tree-unions []
   (props/for-all [query (eql/make-gen {::eql/gen-query-expr
                                        (fn gen-query-expr [{::eql/keys [gen-property gen-join]
@@ -303,6 +329,21 @@
 
 (comment
   (tc/quick-check 50 (valid-db-recursion) :max-size 12))
+
+(defn valid-db->tree-everything []
+  (props/for-all [query (eql/make-gen {
+                                       ::eql/gen-query-expr
+                                       (fn gen-query-expr [{::eql/keys [gen-property gen-join gen-ident gen-param-expr gen-special-property gen-mutation]
+                                                            :as        env}]
+                                         (gen/frequency [[20 (gen-property env)]
+                                                         [6 (gen-join env)]
+                                                         [1 (gen-ident env)]
+                                                         [2 (gen-param-expr env)]]))} ::eql/gen-query)]
+    (let [db (query->db query)]
+      (= (denorm/db->tree query db db) (fpp/db->tree query db db)))))
+
+(comment
+  (tc/quick-check 50 (valid-db->tree-everything) :max-size 12))
 
 (comment
   (gen/sample
@@ -428,22 +469,7 @@
      :new-impl new-impl
      :diff     (diff/diff old-impl new-impl)})
 
-  (let [query    [{[:foo "bar"] [:foo]}]
-        query    (inject-components query)
-        tree     (parser {} query)
-        db       (tree->db query tree true)
-        new-impl (denorm/db->tree query db db)
-        old-impl (fpp/db->tree query db db)]
-    {:valid?   (= new-impl old-impl)
-     :query    query
-     :tree     tree
-     :db       db
-     :old-impl old-impl
-     :new-impl new-impl
-     :diff     (diff/diff old-impl new-impl)}))
-
-(defn ddd []
-  (let [query    [:A/B {:A/A 1}]
+  (let [query    [{[:A/A 0] {:A/A []}}]
         query    (inject-components query)
         tree     (parser {} query)
         db       (tree->db query tree true)
