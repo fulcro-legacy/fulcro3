@@ -43,7 +43,7 @@
         join-entity     (if is-ref? (get-in state-map v) v)
         to-many?        (and (not is-ref?) (vector? join-entity))
         depth-based?    (int? query)
-        recursive?      (or (= '... query) depth-based?)
+        recursive?      (or depth-based? (= '... query))
         stop-recursion? (and recursive? (or (= 0 query)
                                           (and is-ref?
                                             ;; NOTE: allows depth-based to ignore loops
