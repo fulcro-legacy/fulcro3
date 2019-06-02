@@ -86,8 +86,33 @@
       {:point {123 {:bar "baz" :extra "data"}}})
     => {:entry {[:point 123] {:bar "baz", :extra "data"}}}
 
+    "ident join"
+    (verify-db->tree [{[:point 123] [:bar]}]
+      {:entry {:data "foo"}}
+      {:point {123 {:bar "baz" :extra "data"}}})
+    => {[:point 123] {:bar "baz"}}
+
     "recursion"
-    true => true
+    (verify-db->tree '[{:entry [:message {:parent ...}]}]
+      {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+      {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+               2 {:id 2 :message "foo" :parent [:entry 3]}
+               3 {:id 3 :message "foo"}}})
+    => {:entry {:message "foo", :parent {:message "foo", :parent {:message "foo"}}}}
+
+    (verify-db->tree '[{:entry [:message {:parent ...}]}]
+      {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+      {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+               2 {:id 2 :message "foo" :parent [:entry 3]}
+               3 {:id 3 :message "foo" :parent nil}}})
+    => {:entry {:message "foo", :parent {:message "foo", :parent {:message "foo"}}}}
+
+    (verify-db->tree '[{:entry [:message {:parent 1}]}]
+      {:entry {:id 1 :message "foo" :parent [:entry 2]}}
+      {:entry {1 {:id 1 :message "foo" :parent [:entry 2]}
+               2 {:id 2 :message "foo" :parent [:entry 3]}
+               3 {:id 3 :message "foo"}}})
+    => {:entry {:message "foo", :parent {:message "foo"}}}
 
     "wildcard"
     (verify-db->tree
