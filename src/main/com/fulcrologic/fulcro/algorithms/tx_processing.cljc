@@ -58,7 +58,7 @@
   (every-ast? ast-node-or-tree #(not= :call (:type %))))
 
 (>defn sort-queue-writes-before-reads
-  "Sort function on a send queue.  Leaves any active nodes in front, and sorts the remainder of the queue so that writes
+  "Sort function on a send queue. Leaves any active nodes in front, and sorts the remainder of the queue so that writes
   appear before reads, without changing the relative order in blocks of reads/writes."
   [send-queue]
   [::send-queue => ::send-queue]
