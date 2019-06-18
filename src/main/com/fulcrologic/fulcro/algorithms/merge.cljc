@@ -92,7 +92,7 @@
   (->> union-query vals flatten set vec))
 
 (defn mark-missing
-  "Recursively walk the query and response marking anything that was *asked for* in the query but is *not* in the response, as missing.
+  "Recursively walk the query and response marking anything that was *asked for* in the query but is *not* in the response as missing.
   The merge process (which happens later in the plumbing) looks for these markers as indicators to remove any existing
   data in the database (which has provably disappeared).
 

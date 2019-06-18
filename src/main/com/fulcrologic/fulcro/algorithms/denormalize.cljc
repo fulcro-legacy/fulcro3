@@ -154,7 +154,7 @@
 
   Returns a tree of data where each resolved data node is also marked with the current
   *denormalize-time* (dynamically bound outside of this call). Users of this function that
-  are hydrating the UI, should ensure that this time is bound to Fulcro's current internal
+  are hydrating the UI should ensure that this time is bound to Fulcro's current internal
   basis-time using `binding`."
   [query starting-entity state-map]
   (let [ast (eql/query->ast query)]
