@@ -466,7 +466,7 @@
            union-factory-sym (symbol (str "ui-" (name router-sym) "-Union"))
            initial-state     (list `fn '[c params] {::id router-id ::current-route `(comp/get-initial-state ~union-sym ~'params)})
            ident             (list `fn '[t p] [:fulcro.client.routing.routers/by-id router-id])
-           query-fn          (list `fn '[t] [::id {::current-route `(comp/get-query ~union-sym)}])
+           query-fn          (list `fn '[geditggedi] [::id {::current-route `(comp/get-query ~union-sym)}])
            options           (merge
                                (dissoc options :router-targets :router-id)
                                `{:initial-state ~initial-state
