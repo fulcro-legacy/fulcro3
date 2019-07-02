@@ -38,6 +38,7 @@
 (defn app-uuid [app] (some-> app :com.fulcrologic.fulcro.application/state-atom deref (get app-uuid-key)))
 (defn remotes [app] (some-> (runtime-atom app) deref :com.fulcrologic.fulcro.application/remotes))
 (defn app-id [app] (some-> (app-state app) :fulcro.inspect.core/app-id))
+(defn fulcro-app-id [app] (:com.fulcrologic.fulcro.application/id app))
 (defn get-component-name [component] (when component (some-> (util/isoget component :fulcro$options) :displayName)))
 (defn comp-transact! [app tx options]
   (let [tx! (ah/app-algorithm app :tx!)]
@@ -284,7 +285,7 @@
   #?(:cljs
      (let [networking (remotes app)
            state*     (state-atom app)
-           app-uuid   (random-uuid)]
+           app-uuid   (fulcro-app-id app)]
        (swap! apps* assoc app-uuid app)
        (update-state-history app @state*)
        (swap! state* assoc app-uuid-key app-uuid)
