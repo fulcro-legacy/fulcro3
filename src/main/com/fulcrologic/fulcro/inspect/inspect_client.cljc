@@ -301,15 +301,18 @@
 
    app - The app
    env - The mutation env that completed."
-  [app {:keys [component ref state] :as env} {:keys [tx-id tx component-name state-before]}]
+  [app
+   {:keys [component ref state com.fulcrologic.fulcro.algorithms.tx-processing/options]}
+   {:keys [tx-id tx state-before]}]
   #?(:cljs
      (let [component-name (get-component-name component)
-           tx             (cond-> {:fulcro.inspect.ui.transactions/tx-id tx-id
-                                   :fulcro.history/client-time           (js/Date.)
-                                   :fulcro.history/tx                    tx
-                                   :fulcro.history/db-before-hash        (hash state-before)
-                                   :fulcro.history/db-after-hash         (hash @state)
-                                   :fulcro.history/network-sends         []}
+           tx             (cond-> {:fulcro.inspect.ui.transactions/tx-id                    tx-id
+                                   :fulcro.history/client-time                              (js/Date.)
+                                   :fulcro.history/tx                                       tx
+                                   :fulcro.history/db-before-hash                           (hash state-before)
+                                   :fulcro.history/db-after-hash                            (hash @state)
+                                   :fulcro.history/network-sends                            []
+                                   :com.fulcrologic.fulcro.algorithms.tx-processing/options options}
                             component-name (assoc :component component-name)
                             ref (assoc :ident-ref ref))
            app-uuid       (app-uuid app)]
