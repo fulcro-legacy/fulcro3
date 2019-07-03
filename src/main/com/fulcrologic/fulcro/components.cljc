@@ -7,7 +7,7 @@
          [cljs.analyzer :as ana]]
         :cljs
         [[goog.object :as gobj]
-         ["react" :as react]])
+         cljsjs.react])
     [edn-query-language.core :as eql]
     [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]
@@ -358,7 +358,7 @@
                                         :cljs$lang$ctorPrWriter (fn [_ writer _] (cljs.core/-write writer name))}
                                  getDerivedStateFromError (assoc :getDerivedStateFromError getDerivedStateFromError)
                                  getDerivedStateFromProps (assoc :getDerivedStateFromProps (static-wrap-props-state-handler getDerivedStateFromProps)))]
-         (gobj/extend (.-prototype cls) react/Component.prototype js-instance-props
+         (gobj/extend (.-prototype cls) js/React.Component.prototype js-instance-props
            #js {"fulcro$options" options})
          (gobj/extend cls (clj->js statics) #js {"fulcro$options" options})
          (gobj/set cls "fulcro$registryKey" fqkw)           ; done here instead of in extend (clj->js screws it up)
@@ -655,7 +655,7 @@
          (reset! state-atom state))
        this)
      :cljs
-     (apply react/createElement class props children)))
+     (apply js/React.createElement class props children)))
 
 (defn factory
   "Create a factory constructor from a component class created with
@@ -722,6 +722,10 @@
   - `:abort-id` - An ID (you make up) that makes it possible (if the plugins you're using support it) to cancel
     the network portion of the transaction (assuming it has not already completed).
   - `:compressible?` - boolean. Check compressible-transact! docs.
+
+  NOTE: This function calls the application's `tx!` function (which is configurable). Fulcro 2 'follow-on reads' are
+  supported by the default version and are added to the `:refresh` entries. Your choice of rendering algorithm will
+  influence their necessity.
 
   Returns the transaction ID of the submitted transaction.
   "
@@ -824,9 +828,10 @@
                      (some-> class-or-factory meta (contains? :queryid)) (some-> class-or-factory meta :queryid)
                      :otherwise (query-id class-or-factory nil))]
     (if (and (string? queryid) (or query params))
-      (let [index-root! (ah/app-algorithm :index-root!)]
+      (let [{:algorithm/keys [schedule-render! index-root!]} (ah/app-algorithm :index-root!)]
         (swap! state-atom set-query* class-or-factory {:queryid queryid :query query :params params})
-        (when index-root! (index-root! app)))
+        (when index-root! (index-root! app))
+        (when schedule-render! (schedule-render! app {:force-root? true})))
       (log/error "Unable to set query. Invalid arguments."))))
 
 (defn get-indexes
@@ -857,7 +862,8 @@
   "Get all components from the indexes that are instances of the component class.
   `x` can be anything `any->app` is ok with."
   [x class]
-  (some-> (get-indexes x) :class->components (get class)))
+  (let [k (class->registry-key class)]
+    (some-> (get-indexes x) :class->components (get k))))
 
 (defn class->any
   "Get any component from the indexes that are instances of the component class.
@@ -911,7 +917,7 @@
      (let [[props children] (if (map? (first args))
                               [(first args) (rest args)]
                               [#js {} args])]
-       (apply react/createElement react/Fragment (clj->js props) children))))
+       (apply js/React.createElement js/React.Fragment (clj->js props) children))))
 
 #?(:clj
    (defmacro with-parent-context
@@ -942,14 +948,14 @@
   pessimistically (one at a time) in the order given. Follow-on reads in the given transaction will be repeated after each remote
   interaction.
 
-  `comp-or-reconciler` a mounted component or reconciler
+  `component-or-app` a mounted component or the app
   `tx` the tx to run
   `ref` the ident (ref context) in which to run the transaction (including all deferrals)"
-  ([comp-or-reconciler tx]
-   (transact! comp-or-reconciler tx {:optimistic? false}))
-  ([comp-or-reconciler ref tx]
-   (transact! comp-or-reconciler tx {:optimistic? false
-                                     :ref         ref})))
+  ([component-or-app tx]
+   (transact! component-or-app tx {:optimistic? false}))
+  ([component-or-app ref tx]
+   (transact! component-or-app tx {:optimistic? false
+                                   :ref         ref})))
 
 (defn compressible-transact!
   "Identical to `transact!`, but marks the history edge as compressible. This means that if more than one
