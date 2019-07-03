@@ -949,3 +949,17 @@
   ([comp-or-reconciler ref tx]
    (transact! comp-or-reconciler tx {:optimistic? false
                                      :ref         ref})))
+
+(defn compressible-transact!
+  "Identical to `transact!`, but marks the history edge as compressible. This means that if more than one
+  adjacent history transition edge is compressible, only the more recent of the sequence of them is kept. This
+  is useful for things like form input fields, where storing every keystoke in history is undesirable. This
+  also compress the transactions in Fulcro Inspect.
+
+  NOTE: history events that trigger remote interactions are not compressible, since they may be needed for
+  automatic network error recovery handling."
+  ([comp-or-reconciler tx]
+   (transact! comp-or-reconciler tx {:compressible? false}))
+  ([comp-or-reconciler ref tx]
+   (transact! comp-or-reconciler tx {:compressible? false
+                                     :ref           ref})))
