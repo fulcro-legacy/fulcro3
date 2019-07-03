@@ -20,7 +20,7 @@
 (defonce apps* (atom {}))
 (def app-uuid-key :fulcro.inspect.core/app-uuid)
 
-(defonce send-ch #?(:clj nil :cljs (async/chan (async/dropping-buffer 1024))))
+(defonce send-ch #?(:clj nil :cljs (async/chan (async/dropping-buffer 50000))))
 (defn post-message [type data]
   #?(:cljs (async/put! send-ch [type data])))
 
@@ -79,8 +79,6 @@
                                                          :fulcro.inspect.client/prev-state-hash (hash old-state)
                                                          :fulcro.inspect.client/state-hash      (hash new-state)
                                                          :fulcro.inspect.client/state-delta     diff})))))
-
-
 
 (defn event-data [event]
   #?(:cljs (some-> event (gobj/getValueByKeys "data" "fulcro-inspect-devtool-message") encode/read)))
