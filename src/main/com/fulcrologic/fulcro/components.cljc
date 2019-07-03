@@ -721,6 +721,7 @@
     you want to refresh on screen as an extra optimization. Idents are *not* checked against queries.
   - `:abort-id` - An ID (you make up) that makes it possible (if the plugins you're using support it) to cancel
     the network portion of the transaction (assuming it has not already completed).
+  - `:compressible?` - boolean. Check compressible-transact! docs.
 
   Returns the transaction ID of the submitted transaction.
   "
@@ -959,7 +960,7 @@
   NOTE: history events that trigger remote interactions are not compressible, since they may be needed for
   automatic network error recovery handling."
   ([comp-or-reconciler tx]
-   (transact! comp-or-reconciler tx {:compressible? false}))
+   (transact! comp-or-reconciler tx {:compressible? true}))
   ([comp-or-reconciler ref tx]
-   (transact! comp-or-reconciler tx {:compressible? false
+   (transact! comp-or-reconciler tx {:compressible? true
                                      :ref           ref})))
