@@ -329,23 +329,17 @@
                          (when (eql/ident? target)
                            (swap! to-cancel conj target))
                          (when (and (not= new-target active-target) (vector? active-target))
-;; TODO: Remove next lines
-;;                           (when-let [c (comp/ident->any app active-target)]
-;;                             (swap! to-signal conj c)))
-;;;;;;;;
-;; FIXME: Resolve references to prim namespace => /portfolio/fulcro2/src/main/fulcro/client/primitives.cljc
                               (let [mounted-target-class (reduce (fn [acc {:keys [dispatch-key component]}]
                                                                    (when (= ::current-route dispatch-key)
                                                                      (reduced component)))
                                                            nil
-                                                           (some-> component (prim/get-query state-map)
-                                                             prim/query->ast :children))
-                                    mounted-targets      (prim/class->all reconciler mounted-target-class)]
+                                                           (some-> component (comp/get-query state-map)
+                                                             eql/query->ast :children))
+                                    mounted-targets      (comp/class->all reconciler mounted-target-class)]
                                 (when (> (count mounted-targets) 1)
                                   (log/error "More than one route target on screen of type" mounted-target-class))
                                 (when (seq mounted-targets)
                                   (swap! to-signal into mounted-targets))))
-;;;;;;;;
                          (when next-router
                            (recur next-router (rest new-path-remaining))))))
         components (reverse @to-signal)
