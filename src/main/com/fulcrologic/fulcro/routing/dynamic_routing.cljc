@@ -314,18 +314,13 @@
         root       (ast-node-for-live-router app ast)
         to-signal  (atom [])
         to-cancel  (atom [])
-;; TODO: Remove next line
-;;        _          (loop [{:keys [component] :as node} root new-path-remaining new-path]
         _          (loop [{:keys [component children] :as node} root new-path-remaining new-path]
                      (when (and component (router? component))
                        (let [new-target    (first new-path-remaining)
                              router-ident  (comp/get-ident component {})
                              active-target (get-in state-map (conj router-ident ::current-route))
                              {:keys [target]} (get-in state-map (conj router-ident ::pending-route))
-;; TODO: Remove next line
-;;                             next-router   (some #(ast-node-for-live-router app %) (:children node))]
-;; FIXME: Resolve reference to reconciler => /portfolio/fulcro2/src/main/fulcro/client/primitives.cljc
-                               next-router   (some #(ast-node-for-live-router reconciler %) children)]
+                             next-router   (some #(ast-node-for-live-router app %) (:children node))]
                          (when (eql/ident? target)
                            (swap! to-cancel conj target))
                          (when (and (not= new-target active-target) (vector? active-target))
@@ -360,9 +355,8 @@
   ([this-or-app relative-class-or-instance new-route]
    (change-route-relative this-or-app relative-class-or-instance new-route {}))
   ([app-or-comp relative-class-or-instance new-route timeouts]
- ;; TODO: Add next lines
- ;;   (when-not (seq (proposed-new-path this-or-reconciler relative-class-or-instance new-route))
- ;;     (log/error "Could not find route targets for new-route" new-route))
+    (when-not (seq (proposed-new-path this-or-app relative-class-or-instance new-route))
+      (log/error "Could not find route targets for new-route" new-route))
    (if (signal-router-leaving app-or-comp relative-class-or-instance new-route)
      (let [app        (comp/any->app app-or-comp)
            state-map  (app/current-state app)
