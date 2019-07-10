@@ -320,7 +320,7 @@
                              router-ident  (comp/get-ident component {})
                              active-target (get-in state-map (conj router-ident ::current-route))
                              {:keys [target]} (get-in state-map (conj router-ident ::pending-route))
-                             next-router   (some #(ast-node-for-live-router app %) (:children node))]
+                             next-router   (some #(ast-node-for-live-router app %) children)]
                          (when (eql/ident? target)
                            (swap! to-cancel conj target))
                          (when (and (not= new-target active-target) (vector? active-target))
@@ -330,7 +330,7 @@
                                                            nil
                                                            (some-> component (comp/get-query state-map)
                                                              eql/query->ast :children))
-                                    mounted-targets      (comp/class->all reconciler mounted-target-class)]
+                                    mounted-targets      (comp/class->all app mounted-target-class)]
                                 (when (> (count mounted-targets) 1)
                                   (log/error "More than one route target on screen of type" mounted-target-class))
                                 (when (seq mounted-targets)
