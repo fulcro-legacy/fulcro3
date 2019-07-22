@@ -29,7 +29,7 @@
                                       {})
     (server/get-system-prop prop) => (do
                                        (assertions
-                                         "usess the system property config"
+                                         "uses the system property config"
                                          prop => "config")
                                        "some-file")
     (server/load-edn-file! f) =1x=> (do
