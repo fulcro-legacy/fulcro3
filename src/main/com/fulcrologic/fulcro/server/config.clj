@@ -1,7 +1,7 @@
 (ns com.fulcrologic.fulcro.server.config
   "Utilities for managing server configuration via EDN files.  These functions expect a config/defaults.edn to exist
-  on the classpath as a definition for server configuration default values.  When you call `load-config!` it will
-  deep merge the file you supply with the base defaults to return the 'complete' configuration.  When loading
+  on the classpath as a definition for server configuration default values. When you call `load-config!` it will
+  deep merge the file you supply with the base defaults to return the 'complete' configuration. When loading
   configurations a relative path is evaluated against CLASSPATH and an absolute path against the real filesystem.
 
   The values in the EDN files can be :env/VAR to pull a string from an env variable, and :env.edn/VAR to do a `read-string`
