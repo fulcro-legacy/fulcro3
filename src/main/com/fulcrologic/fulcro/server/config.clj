@@ -102,8 +102,8 @@
   it dynamically as the configuration loads.
   "
   ([] (load-config! {}))
-  ([{:keys [config-path]}]
-   (let [defaults (load-edn-file! "config/defaults.edn")
+  ([{:keys [defaults-path config-path]}]
+   (let [defaults (load-edn-file! defaults-path)
          config   (load-edn-file! (or (get-system-prop "config") config-path))]
      (->> (util/deep-merge defaults config)
        (walk/prewalk #(cond-> % (symbol? %) resolve-symbol
